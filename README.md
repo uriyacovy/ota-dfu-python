@@ -1,10 +1,15 @@
 # Python nRF5 OTA DFU Controller
 
-This is my fork of astronomer80's fork of foldedtoad's Python OTA DFU utility. 
-I've made some substantial changes to the code from the original repo, mainly:
+So... this is my fork of dingara's fork of astronomer80's fork of
+foldedtoad's Python OTA DFU utility. 
 
-* Improved code structure and readability
-* Add support for the new secure bootloader from NRF SDK 12
+My own contribution is little more than a brute force conversion to 
+python3. It is sparsely tested so there are likely to be a few 
+remaining bytes versus string bugs remaining in the places I didn't test
+. I used it primarily as part of
+[wasp-os](https://github.com/daniel-thompson/wasp-os) as a way to 
+deliver OTA updates to nRF52-based smart watches, especially the
+[Pine64 PineTime](https://www.pine64.org/pinetime/).
 
 ## What does it do?
 
@@ -18,12 +23,10 @@ This is a Python program that uses `gatttool` (provided with the Linux BlueZ dri
 
 Before using this utility the nRF5 peripheral device needs to be programmed with a DFU bootloader (see Nordic Semiconductor documentation/examples for instructions on that).
 
-This project assumes you are developing on and deploying to a Linux system. Astronomer80 has repos for similar applications for [Windows](https://github.com/astronomer80/nrf52_bledfu_win) and [Mac OS X](https://github.com/astronomer80/nrf52_bledfu_mac).
-
 ## Prerequisites
 
 * BlueZ 5.4 or above
-* Python 2.7
+* Python 3.6
 * Python `pexpect` module (available via pip)
 * Python `intelhex` module (available via pip)
 
