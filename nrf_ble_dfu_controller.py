@@ -163,7 +163,7 @@ class NrfBleDfuController(object, metaclass=ABCMeta):
 
         try:
             self.ble_conn.expect([uuid], timeout=2)
-            handles = re.findall('.*handle: (0x....),.*char value handle: (0x....)', self.ble_conn.before)
+            handles = re.findall(b'.*handle: (0x....),.*char value handle: (0x....)', self.ble_conn.before)
             (handle, value_handle) = handles[-1]
         except pexpect.TIMEOUT as e:
             raise Exception("UUID not found: {}".format(uuid))
@@ -206,7 +206,7 @@ class NrfBleDfuController(object, metaclass=ABCMeta):
             if index == 0:
                 after = self.ble_conn.after
                 hxstr = after.split()[3:]
-                handle = int(float.fromhex(hxstr[0]))
+                handle = int(float.fromhex(hxstr[0].decode('UTF-8')))
                 return hxstr[2:]
 
             else:
