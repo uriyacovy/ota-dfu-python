@@ -8,6 +8,7 @@ from subprocess import call
 
 import pexpect
 import signal
+import sys
 
 #------------------------------------------------------------------------------
 # Bluetooth LE scan for advertising peripheral devices
