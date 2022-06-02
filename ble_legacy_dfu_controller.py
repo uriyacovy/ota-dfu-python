@@ -83,7 +83,7 @@ class BleDfuControllerLegacy(NrfBleDfuController):
         (_, self.ctrlpt_handle, self.ctrlpt_cccd_handle) = self._get_handles(self.UUID_CONTROL_POINT)
         (_, self.data_handle, _) = self._get_handles(self.UUID_PACKET)
 
-        self.pkt_receipt_interval = 5
+        self.pkt_receipt_interval = 10
 
         if verbose:
             print('Control Point Handle: 0x%04x, CCCD: 0x%04x' % (self.ctrlpt_handle, self.ctrlpt_cccd_handle))
@@ -92,6 +92,7 @@ class BleDfuControllerLegacy(NrfBleDfuController):
         # Subscribe to notifications from Control Point characteristic
         if verbose: print("Enabling notifications")
         self._enable_notifications(self.ctrlpt_cccd_handle)
+        time.sleep(1)
 
         # Send 'START DFU' + Application Command
         if verbose: print("Sending START_DFU")
@@ -136,49 +137,56 @@ class BleDfuControllerLegacy(NrfBleDfuController):
         segment_total = int(math.ceil(self.image_size/float(self.pkt_payload_size)))
         time_start = time.time()
         last_send_time = time.time()
-        print("Begin DFU")
-        for i in range(0, self.image_size, self.pkt_payload_size):
-            segment = self.bin_array[i:i + self.pkt_payload_size]
-            self._dfu_send_data(segment)
-            segment_count += 1
+        print(f"Begin DFU image_size: {self.image_size}, payload_size: {self.pkt_payload_size}")
+        try:
+            for i in range(0, self.image_size, self.pkt_payload_size):
+                segment = self.bin_array[i:i + self.pkt_payload_size]
+                if verbose: print(f"sending segement {segment}, len {len(segment)}")
+                self._dfu_send_data(segment)
+                segment_count += 1
 
-            # print "segment #{} of {}, dt = {}".format(segment_count, segment_total, time.time() - last_send_time)
-            # last_send_time = time.time()
+                # print "segment #{} of {}, dt = {}".format(segment_count, segment_total, time.time() - last_send_time)
+                # last_send_time = time.time()
 
-            if (segment_count == segment_total):
-                print_progress(self.image_size, self.image_size, barLength = 50)
+                if (segment_count == segment_total):
+                    print_progress(self.image_size, self.image_size, barLength = 50)
 
-                duration = time.time() - time_start
-                print("\nUpload complete in {} minutes and {} seconds".format(int(duration / 60), int(duration % 60)))
-                if verbose: print("segments sent: {}".format(segment_count))
+                    duration = time.time() - time_start
+                    print("\nUpload complete in {} minutes and {} seconds".format(int(duration / 60), int(duration % 60)))
+                    if verbose: print("segments sent: {}".format(segment_count))
 
-                print("Waiting for DFU complete notification")
-                # Wait for DFU complete notification
-                self._wait_and_parse_notify()
+                    print("Waiting for DFU complete notification")
+                    # Wait for DFU complete notification
+                    self._wait_and_parse_notify()
 
-            elif (segment_count % self.pkt_receipt_interval) == 0:
-                (proc, res, pkts) = self._wait_and_parse_notify()
+                elif (segment_count % self.pkt_receipt_interval) == 0:
+                    (proc, pkts, res) = self._wait_and_parse_notify()
 
-                # TODO: Check pkts == segment_count * pkt_payload_size
+                    # TODO: Check pkts == segment_count * pkt_payload_size
 
-                if res != Responses.SUCCESS:
-                    raise Exception("bad notification status: {}".format(Responses.to_string(res)))
+                    if res != Responses.SUCCESS:
+                        raise Exception("bad notification status: {}".format(Responses.to_string(res)))
 
-                print_progress(pkts, self.image_size, barLength = 50)
+                    print_progress(pkts, self.image_size, barLength = 50)
 
-        # Send Validate Command
-        self._dfu_send_command(Procedures.VALIDATE_FIRMWARE)
+            # Send Validate Command
+            self._dfu_send_command(Procedures.VALIDATE_FIRMWARE)
 
-        print("Waiting for Firmware Validation notification")
-        # Wait for Firmware Validation notification
-        self._wait_and_parse_notify()
+            print("Waiting for Firmware Validation notification")
+            # Wait for Firmware Validation notification
+            self._wait_and_parse_notify()
 
-        # Wait a bit for copy on the peer to be finished
-        time.sleep(1)
+            # Wait a bit for copy on the peer to be finished
+            time.sleep(1)
 
-        # Send Activate and Reset Command
-        print("Activate and reset")
-        self._dfu_send_command(Procedures.ACTIVATE_IMAGE_AND_RESET)
+            # Send Activate and Reset Command
+            print("Activate and reset")
+            self._dfu_send_command(Procedures.ACTIVATE_IMAGE_AND_RESET)
+
+        except Exception as e:
+            # print traceback.format_exc()
+            print("Exception at line {}: {}".format(sys.exc_info()[2].tb_lineno, e))
+            pass
 
     # --------------------------------------------------------------------------
     #  Check if the peripheral is running in bootloader (DFU) or application mode
@@ -205,22 +213,21 @@ class BleDfuControllerLegacy(NrfBleDfuController):
         return self.ble_conn.after.find(b'value: 08 00')!=-1
 
     def switch_to_dfu_mode(self):
-        (_, bl_value_handle, bl_cccd_handle) = self._get_handles(self.UUID_CONTROL_POINT)
+        (_, self.ctrlpt_handle, self.ctrlpt_cccd_handle) = self._get_handles(self.UUID_CONTROL_POINT)
 
-        # Enable notifications
-        cmd = 'char-write-req 0x%02x %02x' % (bl_cccd_handle, 1)
-        if verbose: print(cmd)
-        self.ble_conn.sendline(cmd)
+        if verbose:
+            print('Control Point Handle: 0x%04x, CCCD: 0x%04x' % (bl_value_handle, bl_cccd_handle))
 
-        # Reset the board in DFU mode. After reset the board will be disconnected
-        cmd = 'char-write-req 0x%02x 0104' % (bl_value_handle)
-        if verbose: print(cmd)
-        self.ble_conn.sendline(cmd)
+        # Subscribe to notifications from Control Point characteristic
+        if verbose: print("Enabling notifications")
+        self._enable_notifications(self.ctrlpt_cccd_handle)
+        time.sleep(1)
 
-        time.sleep(0.5)
+        # Send 'START DFU' + Application Command
+        if verbose: print("Sending START_DFU")
+        self._dfu_send_command(Procedures.START_DFU, [0x04])
+        time.sleep(1)
 
-        #print  "Send 'START DFU' + Application Command"
-        #self._dfu_state_set(0x0104)
 
         # Reconnect the board.
         ret = self.scan_and_connect()
@@ -234,7 +241,7 @@ class BleDfuControllerLegacy(NrfBleDfuController):
     # --------------------------------------------------------------------------
     def _dfu_parse_notify(self, notify):
         if len(notify) < 3:
-            print("notify data length error")
+            print("notify data length error {}".format(notify))
             return None
 
         if verbose: print(notify)
@@ -251,11 +258,11 @@ class BleDfuControllerLegacy(NrfBleDfuController):
 
             if verbose: print("opcode: 0x%02x, proc: %s, res: %s" % (dfu_notify_opcode, procedure_str, response_str))
 
-            return (dfu_procedure, dfu_response)
+            return (dfu_notify_opcode, dfu_procedure, dfu_response)
 
         if dfu_notify_opcode == Procedures.PACKET_RECEIPT_NOTIFICATION:
             receipt = bytes_to_uint32_le(notify[1:5])
-            return (dfu_notify_opcode, Responses.SUCCESS, receipt)
+            return (dfu_notify_opcode, receipt, Responses.SUCCESS)
 
     # --------------------------------------------------------------------------
     #  Wait for a notification and parse the response
@@ -269,13 +276,14 @@ class BleDfuControllerLegacy(NrfBleDfuController):
 
         if verbose: print("Parsing notification")
 
-        result = self._dfu_parse_notify(notify)
-        if result[1] != Responses.SUCCESS:
-            raise Exception("Error in {} procedure, reason: {}".format(
-                Procedures.to_string(result[0]),
-                Responses.to_string(result[1])))
+        (dfu_notify_opcode, dfu_procedure, dfu_response) = self._dfu_parse_notify(notify)
+        if (dfu_response) != Responses.SUCCESS:
+            raise Exception("Error in opcode {} procedure {}, reason: {}".format(
+                Procedures.to_string(dfu_notify_opcode),
+                Procedures.to_string(dfu_procedure),
+                Responses.to_string(dfu_response)))
 
-        return result
+        return (dfu_notify_opcode, dfu_procedure, dfu_response)
 
     #--------------------------------------------------------------------------
     # Send the Init info (*.dat file contents) to peripheral device.

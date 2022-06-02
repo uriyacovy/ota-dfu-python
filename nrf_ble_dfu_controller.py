@@ -58,7 +58,7 @@ class NrfBleDfuController(object, metaclass=ABCMeta):
         self.firmware_path = firmware_path
         self.datfile_path = datfile_path
 
-        self.ble_conn = pexpect.spawn("gatttool -b '%s' -t random --interactive" % target_mac)
+        self.ble_conn = pexpect.spawn("gatttool -b '%s' -m 517 -t random --interactive" % target_mac)
         self.ble_conn.delaybeforesend = 0
 
     # --------------------------------------------------------------------------
@@ -118,7 +118,7 @@ class NrfBleDfuController(object, metaclass=ABCMeta):
     # Perform a scan and connect via gatttool.
     # Will return True if a connection was established, False otherwise
     # --------------------------------------------------------------------------
-    def scan_and_connect(self, timeout=2):
+    def scan_and_connect(self, timeout=5):
         if verbose: print("scan_and_connect")
 
         print("Connecting to %s" % (self.target_mac))
@@ -162,7 +162,7 @@ class NrfBleDfuController(object, metaclass=ABCMeta):
         self.ble_conn.sendline('characteristics')
 
         try:
-            self.ble_conn.expect([uuid], timeout=2)
+            self.ble_conn.expect([uuid], timeout=10)
             handles = re.findall(b'.*handle: (0x....),.*char value handle: (0x....)', self.ble_conn.before)
             (handle, value_handle) = handles[-1]
         except pexpect.TIMEOUT as e:
@@ -196,6 +196,7 @@ class NrfBleDfuController(object, metaclass=ABCMeta):
                 # raise an exception. Otherwise, if not a link-lost condition,
                 # continue to wait.
                 #
+                if verbose: print("dfu_wait_for_notify time out")
                 self.ble_conn.sendline('')
                 string = self.ble_conn.before
                 if '[   ]' in string:
@@ -205,6 +206,7 @@ class NrfBleDfuController(object, metaclass=ABCMeta):
 
             if index == 0:
                 after = self.ble_conn.after
+                if verbose: print(f'notification {after}')
                 hxstr = after.split()[3:]
                 handle = int(float.fromhex(hxstr[0].decode('UTF-8')))
                 return hxstr[2:]
